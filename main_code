@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hamming (16,11) Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .bit-card { transition: all 0.2s; }
+        .bit-parity { background-color: #fef3c7; border-color: #d97706; }
+        .bit-data { background-color: #dcfce7; border-color: #16a34a; }
+        .bit-error { background-color: #fee2e2; border-color: #dc2626; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+
+    <div class="max-w-4xl mx-auto py-12 px-4">
+        <header class="mb-12 text-center">
+            <h1 class="text-4xl font-extrabold tracking-tight text-slate-900 mb-2">Hamming (16,11) Visualizer</h1>
+            <p class="text-lg text-slate-600">Encode data, simulate errors, and decode in real-time.</p>
+        </header>
+
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-8">
+            <h2 class="text-xl font-bold mb-4 flex items-center">
+                <span class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-md text-sm mr-3">Theory</span>
+                How it works
+            </h2>
+            <p class="text-slate-600 mb-4">
+                The (16,11) variant is an extended Hamming code. It uses <strong>11 bits</strong> for data and <strong>5 bits</strong> for parity:
+            </p>
+            <ul class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-600">
+                <li class="flex items-start"><span class="text-indigo-500 mr-2">✔</span><strong>Bits 1, 2, 4, 8:</strong> Standard Hamming parity bits.</li>
+                <li class="flex items-start"><span class="text-indigo-500 mr-2">✔</span><strong>Bit 0:</strong> The "Extended" parity bit (covers the entire block).</li>
+                <li class="flex items-start"><span class="text-indigo-500 mr-2">✔</span><strong>Capability:</strong> Detects up to 2 errors, corrects 1.</li>
+            </ul>
+        </section>
+
+        <main class="space-y-8">
+            <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+                <div class="p-6 border-b border-slate-100 bg-slate-50">
+                    <label class="block text-sm font-semibold uppercase tracking-wider text-slate-500 mb-2">Input 11-Bit Data</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="dataInput" maxlength="11" value="10110010110" 
+                               class="flex-1 font-mono text-2xl tracking-[0.5em] p-4 border-2 border-slate-300 rounded-lg focus:border-indigo-500 focus:outline-none">
+                        <button onclick="process()" class="bg-indigo-600 text-white px-8 py-2 rounded-lg font-bold hover:bg-indigo-700 transition">ENCODE</button>
+                    </div>
+                </div>
+
+                <div class="p-8">
+                    <h3 class="text-sm font-semibold text-slate-500 mb-6 uppercase">Encoded Codeword (Click a bit to flip/simulate error)</h3>
+                    <div id="codewordGrid" class="grid grid-cols-4 md:grid-cols-8 gap-3">
+                        </div>
+
+                    <div id="statusResult" class="mt-10 p-4 rounded-lg bg-slate-100 border border-slate-200 text-center font-medium">
+                        Enter bits and press Encode to begin.
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="mt-12 text-center text-slate-400 text-sm">
+            Built for GitHub Pages • Hamming (16,11) SEC-DED
+        </footer>
+    </div>
+
+    <script>
+        let currentCodeword = new Array(16).fill(0);
+
+        function getParity(bits, indices) {
+            return indices.reduce((acc, idx) => acc ^ bits[idx], 0);
+        }
+
+        function process() {
+            const input = document.getElementById('dataInput').value.replace(/[^01]/g, '');
+            if (input.length !== 11) {
+                alert("Please enter exactly 11 bits (0 or 1)");
+                return;
+            }
+
+            const data = input.split('').map(Number);
+            let c = new Array(16).fill(0);
+
+            // Mapping 11 data bits to non-power-of-2 positions
+            // Positions: 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15
+            const dataMap = [3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15];
+            dataMap.forEach((pos, i) => c[pos] = data[i]);
+
+            // Calculate Hamming Parities
+            c[1] = getParity(c, [3, 5, 7, 9, 11, 13, 15]);
+            c[2] = getParity(c, [3, 6, 7, 10, 11, 14, 15]);
+            c[4] = getParity(c, [5, 6, 7, 12, 13, 14, 15]);
+            c[8] = getParity(c, [9, 10, 11, 12, 13, 14, 15]);
+
+            // Global Parity (Bit 0)
+            c[0] = getParity(c, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+
+            currentCodeword = c;
+            render();
+            analyze();
+        }
+
+        function toggleBit(i) {
+            currentCodeword[i] = currentCodeword[i] === 0 ? 1 : 0;
+            render();
+            analyze();
+        }
+
+        function analyze() {
+            const c = currentCodeword;
+            // Syndrome calculation
+            const s1 = getParity(c, [1, 3, 5, 7, 9, 11, 13, 15]);
+            const s2 = getParity(c, [2, 3, 6, 7, 10, 11, 14, 15]);
+            const s4 = getParity(c, [4, 5, 6, 7, 12, 13, 14, 15]);
+            const s8 = getParity(c, [8, 9, 10, 11, 12, 13, 14, 15]);
+            
+            const syndrome = s1 + (s2 * 2) + (s4 * 4) + (s8 * 8);
+            const globalParityMatch = getParity(c, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]) === c[0];
+
+            const resultDiv = document.getElementById('statusResult');
+            
+            if (syndrome === 0 && globalParityMatch) {
+                resultDiv.className = "mt-10 p-4 rounded-lg bg-green-100 border border-green-200 text-green-800 text-center font-bold";
+                resultDiv.innerText = "VALID: No errors detected.";
+            } else if (syndrome !== 0 && !globalParityMatch) {
+                resultDiv.className = "mt-10 p-4 rounded-lg bg-blue-100 border border-blue-200 text-blue-800 text-center font-bold";
+                resultDiv.innerText = `SINGLE ERROR: Detected at position ${syndrome}. Correctable.`;
+                document.getElementById(`bit-${syndrome}`).classList.add('bit-error');
+            } else if (syndrome === 0 && !globalParityMatch) {
+                resultDiv.className = "mt-10 p-4 rounded-lg bg-blue-100 border border-blue-200 text-blue-800 text-center font-bold";
+                resultDiv.innerText = "SINGLE ERROR: Bit 0 (Global Parity) is incorrect.";
+                document.getElementById(`bit-0`).classList.add('bit-error');
+            } else {
+                resultDiv.className = "mt-10 p-4 rounded-lg bg-red-100 border border-red-200 text-red-800 text-center font-bold";
+                resultDiv.innerText = "DOUBLE ERROR: Two errors detected. Uncorrectable.";
+            }
+        }
+
+        function render() {
+            const grid = document.getElementById('codewordGrid');
+            grid.innerHTML = '';
+            const parityPositions = [0, 1, 2, 4, 8];
+
+            currentCodeword.forEach((bit, i) => {
+                const isParity = parityPositions.includes(i);
+                const btn = document.createElement('button');
+                btn.id = `bit-${i}`;
+                btn.onclick = () => toggleBit(i);
+                btn.className = `bit-card p-4 border-2 rounded-lg font-mono text-xl font-bold flex flex-col items-center ${isParity ? 'bit-parity' : 'bit-data'}`;
+                btn.innerHTML = `
+                    <span class="text-xs opacity-50 mb-1">${i}</span>
+                    <span>${bit}</span>
+                    <span class="text-[10px] mt-1 uppercase tracking-tighter">${isParity ? 'Parity' : 'Data'}</span>
+                `;
+                grid.appendChild(btn);
+            });
+        }
+
+        // Initial run
+        process();
+    </script>
+</body>
+</html>
